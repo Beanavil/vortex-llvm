@@ -447,7 +447,8 @@ def HasStdExtZawrs : Predicate<"Subtarget->hasStdExtZawrs()">,
 def FeatureVortex
     : SubtargetFeature<"vortex", "HasExtVortex", "true", 
                        "'Vortex' (Vortex ISA Extension)">;
-def HasExtVortex : Predicate<"Subtarget->HasExtVortex()">, 
+
+def HasExtVortex : Predicate<"Subtarget->hasExtVortex()">, 
                              AssemblerPredicate<(all_of FeatureVortex), 
                              "'Vortex' (Vortex ISA Extension)">;
 

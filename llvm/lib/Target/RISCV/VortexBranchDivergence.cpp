@@ -1102,12 +1102,12 @@ static bool FindNextJoin(MachineBasicBlock::iterator* out,
 }
 
 bool VortexBranchDivergence2::runOnMachineFunction(MachineFunction &MF) {
-  const auto &ST = MF.getSubtarget();
+  const auto &ST = MF.getSubtarget<RISCVSubtarget>();
   auto TII = ST.getInstrInfo();
   auto& MRI = MF.getRegInfo();
 
   // Check if the Vortex extension is enabled
-  assert(!ST.hasExtVortex());
+  // assert(!ST.hasExtVortex());
 
   bool Changed = false;
 
