@@ -137,9 +137,9 @@ let TargetPrefix = "riscv" in {
 
   class MLDST_NAME<string Op, M_REGS Frag> {
     string intr = "llvm.riscv.vx."
-                  # Frag.geom
-                  # "." # Op
+                  # Op
                   # "." # Frag.frag
+                  # "." # Frag.geom
                   # "." # Frag.type
                   ;
     string record = !subst(".", "_",
@@ -148,8 +148,8 @@ let TargetPrefix = "riscv" in {
 
   class MMUL_NAME<M_REGS A> {
     string intr = "llvm.riscv.vx."
-                  # A.geom
-                  # ".mmul"
+                  # "mmul"
+                  # "." # A.geom
                   # "." # A.type;
 
     string record = !subst(".", "_",
@@ -234,7 +234,7 @@ let TargetPrefix = "riscv" in {
 
   // MMUL
   class VX_MMUL<M_REGS A, M_REGS B>
-    : Intrinsic<[llvm_i32_ty] /*output types*/,
+    : Intrinsic<[] /*output types*/,
                 !listconcat(A.regs, B.regs) /*parameter types*/,
                 [IntrNoMem, IntrNoCallback],
                 MMUL_NAME<A>.intr>;
