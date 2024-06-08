@@ -258,6 +258,41 @@ static DecodeStatus decodeVMaskReg(MCInst &Inst, uint64_t RegNo,
   return MCDisassembler::Success;
 }
 
+static DecodeStatus DecodeTGPR2RegisterClass(MCInst &Inst, uint64_t RegNo,
+                                             uint64_t Address,
+                                             const MCDisassembler *Decoder) {
+  // Last group of 2 scalar registers starts at T30M2, as the index of T#INdex#M2
+  // specifies the index of the first register of the group.
+  if (RegNo >= 31)
+    return MCDisassembler::Fail;
+
+  // Groups are of 2 registers, starting on X0.
+  if (RegNo % 2)
+    return MCDisassembler::Fail;
+
+  MCRegister Reg = RISCV::T0M2 + RegNo;
+  Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeTGPR4RegisterClass(MCInst &Inst, uint64_t RegNo,
+                                             uint64_t Address,
+                                             const MCDisassembler *Decoder) {
+
+  // Last group of 4 scalar registers starts at T28M4, as the index of T#INdex#M4
+  // specifies the index of the first register of the group.
+  if (RegNo >= 29)
+    return MCDisassembler::Fail;
+
+  // Groups are of 4 registers, starting on X0.
+  if (RegNo % 4)
+    return MCDisassembler::Fail;
+
+  MCRegister Reg = RISCV::T0M4 + RegNo;
+  Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
 // Add implied SP operand for instructions *SP compressed instructions. The SP
 // operand isn't explicitly encoded in the instruction.
 static void addImplySP(MCInst &Inst, int64_t Address,

@@ -597,3 +597,51 @@ def AnyReg : RegisterClass<"RISCV", [untyped], 32,
                                 (sequence "V%u", 0, 31))> {
   let Size = 32;
 }
+
+// Vortex tensor registers
+let RegAltNameIndices = [ABIRegAltName] in {
+  foreach Index = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22,
+                   24, 26, 28, 30] in {
+    defvar Reg = !cast<Register>("X"#Index);
+    def T#Index#M2 : RISCVRegWithSubRegs<Index                                  /*Enc*/,
+                                         Reg.AsmName                            /*AsmName*/,
+                                         // We use two registers
+                                         [!cast<Register>("X"#Index),
+                                          !cast<Register>("X"#!add(Index, 1))], /*SubRegs*/
+                                          Reg.AltNames                          /*AltNames*/>
+    {
+      let SubRegIndices = [sub_32, sub_32_hi];
+    }
+  }
+
+  foreach Index = [0, 4, 8, 12, 16, 20, 24, 28] in {
+    defvar Reg = !cast<Register>("X"#Index);
+    def T#Index#M4 : RISCVRegWithSubRegs<Index                                       /*Enc*/,
+                                         Reg.AsmName                                 /*AsmName*/,
+                                         // We use two groups of two registers
+                                         [!cast<Register>("T"#Index#"M2"),
+                                          !cast<Register>("T"#!add(Index, 2)#"M2")], /*SubRegs*/
+                                          Reg.AltNames                               /*AltNames*/>
+    {
+      let SubRegIndices = [sub_vrm1_0, sub_vrm1_1];
+    }
+  }
+}
+
+let RegInfos = XLenRI in {
+def TGPR2 : RegisterClass<"RISCV"  /*namespace*/,
+                          [XLenVT] /*regTypes, XLenVT=i32 or i64 depending or arch*/,
+                          32       /*alignment*/,
+                          (add
+                              T0M2, T2M2, T4M2, T6M2, T8M2, T10M2, T12M2, T14M2,
+                              T16M2, T18M2, T20M2, T22M2, T24M2, T26M2, T28M2,
+                              T30M2
+                          )        /*reglist*/>;
+
+def TGPR4 : RegisterClass<"RISCV"  /*namespace*/,
+                          [XLenVT] /*regTypes, XLenVT=i32 or i64 depending or arch*/,
+                          32       /*alignment*/,
+                          (add
+                              T0M2, T4M2, T8M2, T12M2, T16M2, T20M2, T24M2, T28M2
+                          )        /*reglist*/>;
+}
