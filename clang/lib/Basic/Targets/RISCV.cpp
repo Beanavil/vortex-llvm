@@ -101,6 +101,14 @@ bool RISCVTargetInfo::validateAsmConstraint(
       return true;
     }
     return false;
+  case 't':
+    // A tensor register.
+    if (Name[1] == 'r') {
+      Info.setAllowsRegister();
+      Name += 1;
+      return true;
+    }
+    return false;
   }
 }
 
