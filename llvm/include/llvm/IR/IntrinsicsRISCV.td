@@ -105,33 +105,23 @@ let TargetPrefix = "riscv" in {
   // Geom: m<M>n<N>k<K>. E.g. m8n32k16
   // Frag: [abc]
   // Type: Type of the matrix elements.
-  class M_REGS<string Geom, string Frag, string Type> {
+  class M_REGS<string Geom, string Frag> {
     string geom = Geom;
     string frag = Frag;
-    string type = Type;
-    string gft = geom#":"#frag#":"#type;
-    string ft = frag#":"#type;
+    string gft = geom#":"#frag#;
+    string ft = frag#;
     // Vortex WMMA instructions only support 2x2 and 4x4 matrices with int32_t
     // elements as of now.
     // The types assigned here are the OUTPUT types of load and store
     // intrinsics.
     list<LLVMType> regs = !cond(
       // mload
-      !eq(gft,"m2n2k2:a:s32") : [llvm_i32_ty],
-      !eq(gft,"m2n2k2:a:u32") : [llvm_i32_ty],
-      !eq(gft,"m4n4k4:a:s32") : [llvm_i32_ty],
-      !eq(gft,"m4n4k4:a:u32") : [llvm_i32_ty],
-
-      !eq(gft,"m2n2k2:b:s32") : [llvm_i32_ty],
-      !eq(gft,"m2n2k2:b:u32") : [llvm_i32_ty],
-      !eq(gft,"m4n4k4:b:s32") : [llvm_i32_ty],
-      !eq(gft,"m4n4k4:b:u32") : [llvm_i32_ty],
+      !eq(gft,"m2n2k2:a") : [llvm_i32_ty],
+      !eq(gft,"m2n2k2:b") : [llvm_i32_ty],
+      !eq(gft,"m2n2k2:c") : [llvm_i32_ty],
 
       // mstore
-      !eq(gft,"m2n2k2:c:s32") : [],
-      !eq(gft,"m2n2k2:c:u32") : [],
-      !eq(gft,"m4n4k4:c:s32") : [],
-      !eq(gft,"m4n4k4:c:u32") : []
+      !eq(gft,"m2n2k2:d") : [],
     );
   }
 
@@ -140,7 +130,6 @@ let TargetPrefix = "riscv" in {
                   # Op
                   # "." # Frag.frag
                   # "." # Frag.geom
-                  # "." # Frag.type
                   ;
     string record = !subst(".", "_",
                     !subst("llvm.", "int_", intr));
@@ -149,8 +138,16 @@ let TargetPrefix = "riscv" in {
   class MMUL_NAME<M_REGS A> {
     string intr = "llvm.riscv.vx."
                   # "mmul"
-                  # "." # A.geom
-                  # "." # A.type;
+                  # "." # A.geom;
+
+    string record = !subst(".", "_",
+                    !subst("llvm.", "int_", intr));
+  }
+
+  class MADD_NAME<M_REGS A> {
+    string intr = "llvm.riscv.vx."
+                  # "madd"
+                  # "." # A.geom;
 
     string record = !subst(".", "_",
                     !subst("llvm.", "int_", intr));
@@ -158,50 +155,39 @@ let TargetPrefix = "riscv" in {
 
   // Generates list of 3-tuples of M_REGS representing a valid MMA op.
   //  - Geom: list of supported geometries.
-  //  - TypeX: type of the corresponding fragment's element.
-  //
-  // Notes:
-  //  - TypeB may be empty if it must match that of TypeA.
-  class M_OPS<list<string> Geom, list<string> TypeA, list<string> TypeB,
-              list<string> TypeC> {
+  class M_OPS<list<string> Geom> {
     list<list<M_REGS>> ret =
     // !foldl(init, list, acc, var, expr)
       !foldl([]<list<M_REGS>>, Geom, t1, geom, !listconcat(t1,
-      !foldl([]<list<M_REGS>>, TypeA, t2, type_a, !listconcat(t2,
-      !foldl([]<list<M_REGS>>, !if(!size(TypeB), TypeB, [type_a]), t3, type_b, !listconcat(t3,
-      !foldl([]<list<M_REGS>>, TypeC, t4, type_c, !listconcat(t4,
-              [[M_REGS<geom, "a", type_a>,
-                M_REGS<geom, "b", type_b>,
-                M_REGS<geom, "c", type_c>]]))))))));
+               [[M_REGS<geom, "a">,
+                 M_REGS<geom, "b">,
+                 M_REGS<geom, "c">,
+                 M_REGS<geom, "d">]]));
     // Debugging aid for readable representation of the list above.
     // !foreach(var, sequence, expr)
     list<list<string>> ops = !foreach(x, ret, [x[0].gft, x[1].gft, x[2].gft]);
   }
 
-  class M_LDST_OPS<list<string> Geom, list<string> Frags, list<string> Types> {
+  class M_LDST_OPS<list<string> Geom, list<string> Frags> {
     list<M_REGS> ret =
       !foldl([]<M_REGS>, Geom, t1, geom, !listconcat(t1,
-      !foldl([]<M_REGS>, Frags, t2, frag, !listconcat(t2,
-      !foldl([]<M_REGS>, Types, t3, type, !listconcat(t3,
-              [M_REGS<geom, frag, type>]))))));
+      !foldl([]<M_REGS>, Frags, t2, frag, !listconcat(t2, [M_REGS<geom, frag>]))));
     // Debugging aid for readable representation of the list above.
     list<string> ops = !foreach(x, ret, x.gft);
   }
 
   class VX_M_OPS {
-    list<list<M_REGS>> int_m_ops = M_OPS<
-              ["m2n2k2", "m4n4k4"] /*geoms*/,
-              ["s32", "u32"] /*A types*/, []  /*B types = A types*/, ["s32"]  /*C types*/>.ret;
+    list<list<M_REGS>> int_m_ops = M_OPS<["m2n2k2"] /*geoms*/>.ret;
     list<list<M_REGS>> all_m_ops = int_m_ops;
 
     list<M_REGS> ldst_int_abc_ops = M_LDST_OPS<
-              ["m2n2k2", "m4n4k4"] /*geoms*/,
-              ["a", "b", "c"] /*frags*/, ["s32", "u32"] /*types*/>.ret;
+              ["m2n2k2"] /*geoms*/,
+              ["a", "b", "c", "d"] /*frags*/>.ret;
     list<M_REGS> all_ldst_ops = ldst_int_abc_ops;
 
     // Separate A/B fragments (loads) from C (stores).
-    list<M_REGS> all_ld_ops = !filter(op, all_ldst_ops, !ne(op.frag, "c"));
-    list<M_REGS> all_st_ops = !filter(op, all_ldst_ops, !eq(op.frag, "c"));
+    list<M_REGS> all_ld_ops = !filter(op, all_ldst_ops, !ne(op.frag, "d"));
+    list<M_REGS> all_st_ops = !filter(op, all_ldst_ops, !eq(op.frag, "d"));
   }
 
   def VX_M_OPS : VX_M_OPS;
@@ -234,7 +220,7 @@ let TargetPrefix = "riscv" in {
 
   // MMUL
   class VX_MMUL<M_REGS A, M_REGS B>
-    : Intrinsic<[] /*output types*/,
+    : Intrinsic<[llvm_i32_ty] /*output types*/,
                 !listconcat(A.regs, B.regs) /*parameter types*/,
                 [IntrNoMem, IntrNoCallback],
                 MMUL_NAME<A>.intr>;
@@ -243,6 +229,18 @@ let TargetPrefix = "riscv" in {
   foreach op = VX_M_OPS.all_m_ops in
       def MMUL_NAME<op[0]/*Regs A*/>.record
         : VX_MMUL<op[0]/*Regs A*/, op[1]/*Regs B*/>;
+
+  // MADD
+  class VX_MADD<M_REGS A, M_REGS B>
+    : Intrinsic<[llvm_i32_ty] /*output types*/,
+                !listconcat(A.regs, B.regs) /*parameter types*/,
+                [IntrNoMem, IntrNoCallback],
+                MMUL_NAME<A>.intr>;
+
+  // Define mmul intrinsics
+  foreach op = VX_M_OPS.all_m_ops in
+      def MADD_NAME<op[0]/*Regs A*/>.record
+        : VX_MADD<op[0]/*Regs A*/, op[1]/*Regs B*/>;
 }
 
 //===----------------------------------------------------------------------===//

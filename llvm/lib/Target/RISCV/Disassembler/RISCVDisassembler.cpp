@@ -261,34 +261,10 @@ static DecodeStatus decodeVMaskReg(MCInst &Inst, uint64_t RegNo,
 static DecodeStatus DecodeTGPR2RegisterClass(MCInst &Inst, uint64_t RegNo,
                                              uint64_t Address,
                                              const MCDisassembler *Decoder) {
-  // Last group of 2 scalar registers starts at T30M2, as the index of T#INdex#M2
-  // specifies the index of the first register of the group.
-  if (RegNo >= 31)
+  if ((RegNo >= 31) || (RegNo & 1))
     return MCDisassembler::Fail;
 
-  // Groups are of 2 registers, starting on X0.
-  if (RegNo % 2)
-    return MCDisassembler::Fail;
-
-  MCRegister Reg = RISCV::T0M2 + RegNo;
-  Inst.addOperand(MCOperand::createReg(Reg));
-  return MCDisassembler::Success;
-}
-
-static DecodeStatus DecodeTGPR4RegisterClass(MCInst &Inst, uint64_t RegNo,
-                                             uint64_t Address,
-                                             const MCDisassembler *Decoder) {
-
-  // Last group of 4 scalar registers starts at T28M4, as the index of T#INdex#M4
-  // specifies the index of the first register of the group.
-  if (RegNo >= 29)
-    return MCDisassembler::Fail;
-
-  // Groups are of 4 registers, starting on X0.
-  if (RegNo % 4)
-    return MCDisassembler::Fail;
-
-  MCRegister Reg = RISCV::T0M4 + RegNo;
+  MCRegister Reg = RISCV::X0 + RegNo;
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }
