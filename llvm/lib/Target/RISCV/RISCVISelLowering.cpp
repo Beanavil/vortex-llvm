@@ -13682,9 +13682,7 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
     if (TRI->isTypeLegalForClass(RISCV::VMV0RegClass, VT.SimpleTy))
       return std::make_pair(0U, &RISCV::VMV0RegClass);
   } else if (Constraint == "tr") {
-    for (const auto *RC : {&RISCV::TGPR2RegClass, &RISCV::TGPR4RegClass}) {
-      return std::make_pair(0U, RC);
-    }
+    return std::make_pair(0U, &RISCV::TGPR2RegClass);
   }
 
   // Clang will correctly decode the usage of register name aliases into their

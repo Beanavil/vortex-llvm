@@ -115,6 +115,7 @@ bool RISCVTargetInfo::validateAsmConstraint(
 std::string RISCVTargetInfo::convertConstraint(const char *&Constraint) const {
   std::string R;
   switch (*Constraint) {
+  case 't':
   case 'v':
     R = std::string("^") + std::string(Constraint, 2);
     Constraint += 1;
