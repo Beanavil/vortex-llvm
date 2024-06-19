@@ -13642,7 +13642,7 @@ RISCVTargetLowering::getConstraintType(StringRef Constraint) const {
       return C_Other;
     }
   } else {
-    if (Constraint == "vr" || Constraint == "vm")
+    if (Constraint == "vr" || Constraint == "vm" || Constraint == "tr")
       return C_RegisterClass;
   }
   return TargetLowering::getConstraintType(Constraint);
@@ -13681,6 +13681,8 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   } else if (Constraint == "vm") {
     if (TRI->isTypeLegalForClass(RISCV::VMV0RegClass, VT.SimpleTy))
       return std::make_pair(0U, &RISCV::VMV0RegClass);
+  } else if (Constraint == "tr") {
+    return std::make_pair(0U, &RISCV::TGPR2RegClass);
   }
 
   // Clang will correctly decode the usage of register name aliases into their

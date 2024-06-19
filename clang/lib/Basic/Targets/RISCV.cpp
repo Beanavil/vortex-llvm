@@ -101,12 +101,21 @@ bool RISCVTargetInfo::validateAsmConstraint(
       return true;
     }
     return false;
+  case 't':
+    // A tensor register.
+    if (Name[1] == 'r') {
+      Info.setAllowsRegister();
+      Name += 1;
+      return true;
+    }
+    return false;
   }
 }
 
 std::string RISCVTargetInfo::convertConstraint(const char *&Constraint) const {
   std::string R;
   switch (*Constraint) {
+  case 't':
   case 'v':
     R = std::string("^") + std::string(Constraint, 2);
     Constraint += 1;

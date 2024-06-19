@@ -325,6 +325,7 @@ bool RISCVPassConfig::addPreISel() {
                                   /* MergeExternalByDefault */ true));
   }
 
+  // LLVM passes for Vortex
   if (TM->getTargetFeatureString().contains("vortex")) {
     if (VortexBranchDivergenceMode != 0) {
       addPass(createScalarizerPass());

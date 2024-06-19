@@ -1107,7 +1107,7 @@ bool VortexBranchDivergence2::runOnMachineFunction(MachineFunction &MF) {
   auto& MRI = MF.getRegInfo();
 
   // Check if the Vortex extension is enabled
-  // assert(!ST.hasExtVortex());
+  assert(!ST.hasExtVortex());
 
   bool Changed = false;
 

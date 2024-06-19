@@ -97,6 +97,152 @@ let TargetPrefix = "riscv" in {
 
 } // TargetPrefix = "riscv"
 
+  //
+  // MISC
+  //
+
+  // Helper class that represents a 'fragment' of a Vortex WMMA instruction.
+  // Geom: m<M>n<N>k<K>. E.g. m8n32k16
+  // Frag: [abc]
+  // Type: Type of the matrix elements.
+  class M_REGS<string Geom, string Frag> {
+    string geom = Geom;
+    string frag = Frag;
+    string gft = geom#":"#frag#;
+    string ft = frag#;
+    // Vortex WMMA instructions only support 2x2 and 4x4 matrices with int32_t
+    // elements as of now.
+    // The types assigned here are the OUTPUT types of load and store
+    // intrinsics.
+    list<LLVMType> regs = !cond(
+      // mload
+      !eq(gft,"m2n2k2:a") : [llvm_i32_ty],
+      !eq(gft,"m2n2k2:b") : [llvm_i32_ty],
+      !eq(gft,"m2n2k2:c") : [llvm_i32_ty],
+
+      // mstore
+      !eq(gft,"m2n2k2:d") : [],
+    );
+  }
+
+  class MLDST_NAME<string Op, M_REGS Frag> {
+    string intr = "llvm.riscv.vx."
+                  # Op
+                  # "." # Frag.frag
+                  # "." # Frag.geom
+                  ;
+    string record = !subst(".", "_",
+                    !subst("llvm.", "int_", intr));
+  }
+
+  class MMUL_NAME<M_REGS A> {
+    string intr = "llvm.riscv.vx."
+                  # "mmul"
+                  # "." # A.geom;
+
+    string record = !subst(".", "_",
+                    !subst("llvm.", "int_", intr));
+  }
+
+  class MADD_NAME<M_REGS A> {
+    string intr = "llvm.riscv.vx."
+                  # "madd"
+                  # "." # A.geom;
+
+    string record = !subst(".", "_",
+                    !subst("llvm.", "int_", intr));
+  }
+
+  // Generates list of 3-tuples of M_REGS representing a valid MMA op.
+  //  - Geom: list of supported geometries.
+  class M_OPS<list<string> Geom> {
+    list<list<M_REGS>> ret =
+    // !foldl(init, list, acc, var, expr)
+      !foldl([]<list<M_REGS>>, Geom, t1, geom, !listconcat(t1,
+               [[M_REGS<geom, "a">,
+                 M_REGS<geom, "b">,
+                 M_REGS<geom, "c">,
+                 M_REGS<geom, "d">]]));
+    // Debugging aid for readable representation of the list above.
+    // !foreach(var, sequence, expr)
+    list<list<string>> ops = !foreach(x, ret, [x[0].gft, x[1].gft, x[2].gft]);
+  }
+
+  class M_LDST_OPS<list<string> Geom, list<string> Frags> {
+    list<M_REGS> ret =
+      !foldl([]<M_REGS>, Geom, t1, geom, !listconcat(t1,
+      !foldl([]<M_REGS>, Frags, t2, frag, !listconcat(t2, [M_REGS<geom, frag>]))));
+    // Debugging aid for readable representation of the list above.
+    list<string> ops = !foreach(x, ret, x.gft);
+  }
+
+  class VX_M_OPS {
+    list<list<M_REGS>> int_m_ops = M_OPS<["m2n2k2"] /*geoms*/>.ret;
+    list<list<M_REGS>> all_m_ops = int_m_ops;
+
+    list<M_REGS> ldst_int_abc_ops = M_LDST_OPS<
+              ["m2n2k2"] /*geoms*/,
+              ["a", "b", "c", "d"] /*frags*/>.ret;
+    list<M_REGS> all_ldst_ops = ldst_int_abc_ops;
+
+    // Separate A/B fragments (loads) from C (stores).
+    list<M_REGS> all_ld_ops = !filter(op, all_ldst_ops, !ne(op.frag, "d"));
+    list<M_REGS> all_st_ops = !filter(op, all_ldst_ops, !eq(op.frag, "d"));
+  }
+
+  def VX_M_OPS : VX_M_OPS;
+
+let TargetPrefix = "riscv" in {
+  //
+  // Vortex M (matrix) instructions
+  //
+  // MLOAD
+  class VX_MLOAD<M_REGS Frag>
+    : Intrinsic<Frag.regs /*output types*/,
+                [llvm_i32_ty, llvm_anyint_ty] /*parameter types*/,
+                [IntrReadMem, IntrArgMemOnly, IntrNoCallback, ReadOnly<ArgIndex<0>>, NoCapture<ArgIndex<0>>],
+                MLDST_NAME<"mload", Frag>.intr>;
+
+  // MSTORE
+  class VX_MSTORE<M_REGS Frag>
+    : Intrinsic<Frag.regs /*output types*/,
+                [llvm_i32_ty, llvm_i32_ty, llvm_anyint_ty] /*parameter types*/,
+                [IntrWriteMem, IntrArgMemOnly, IntrNoCallback, WriteOnly<ArgIndex<0>>, NoCapture<ArgIndex<0>>],
+                MLDST_NAME<"mstore", Frag>.intr>;
+
+  // Define all load/store intrinsic variants
+  foreach frag = VX_M_OPS.all_ld_ops in
+    def MLDST_NAME<"mload", frag>.record
+          : VX_MLOAD<frag>;
+  foreach frag = VX_M_OPS.all_st_ops in
+    def MLDST_NAME<"mstore", frag>.record
+          : VX_MSTORE<frag>;
+
+  // MMUL
+  class VX_MMUL<M_REGS A, M_REGS B>
+    : Intrinsic<[llvm_i32_ty] /*output types*/,
+                !listconcat(A.regs, B.regs) /*parameter types*/,
+                [IntrNoMem, IntrNoCallback],
+                MMUL_NAME<A>.intr>;
+
+  // Define mmul intrinsics
+  foreach op = VX_M_OPS.all_m_ops in
+      def MMUL_NAME<op[0]/*Regs A*/>.record
+        : VX_MMUL<op[0]/*Regs A*/, op[1]/*Regs B*/>;
+
+  // MADD
+  class VX_MADD<M_REGS A, M_REGS B>
+    : Intrinsic<[llvm_i32_ty] /*output types*/,
+                !listconcat(A.regs, B.regs) /*parameter types*/,
+                [IntrNoMem, IntrNoCallback],
+                MMUL_NAME<A>.intr>;
+
+  // Define mmul intrinsics
+  foreach op = VX_M_OPS.all_m_ops in
+      def MADD_NAME<op[0]/*Regs A*/>.record
+        : VX_MADD<op[0]/*Regs A*/, op[1]/*Regs B*/>;
+}
+
 //===----------------------------------------------------------------------===//
 // Bitmanip (Bit Manipulation) Extension
 

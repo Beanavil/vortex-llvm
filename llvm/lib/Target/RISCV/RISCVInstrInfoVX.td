@@ -123,3 +123,5 @@ def : Pat<(int_riscv_vx_ng), (CSRRS CSR_NG.Encoding, X0)>;
 
 def : Pat<(int_riscv_vx_bar GPR:$rs1, GPR:$rs2), (VX_BAR GPR:$rs1, GPR:$rs2)>;
 
+// Vortex tensor intrinsics
+include "RISCVIntrinsicsVX.td"
